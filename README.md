@@ -13,6 +13,12 @@ Then activate it using command
 ```
 conda activate transferradar && alias -s py=python && clear
 ```
+Then you have to install requests and pytelegrambotapi using commands:
+```
+pip install requests
+pip install pyTelegramBotApi
+```
+
 And then you can run scripts this way:
 ```
 btc_check.py
