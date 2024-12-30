@@ -3,6 +3,23 @@ Python scripts to monitor high-value transactions for BTC, USDT (TRC20) and ETH 
 
 You can check how it works here: https://t.me/transferRadar
 
+# Installation
+
+To install it you can create conda environment first, like this:
 ```
-python3 btc_check.py
+conda create --name transferradar -c conda-forge python=3.11
+```
+Then activate it using command
+```
+conda activate transferradar && alias -s py=python && clear
+```
+And then you can run scripts this way:
+```
+btc_check.py
+```
+```
+eth_check.py
+```
+```
+trc20_check.py
 ```
