@@ -26,7 +26,7 @@ btc_wallets_data.json
 eth_wallets_data.json
 trc20_wallets_data.json
 ```
-in this fomrat:
+in this JSON format:
 ```
 [
   {
