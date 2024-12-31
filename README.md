@@ -18,7 +18,22 @@ Then you have to install requests and pytelegrambotapi using commands:
 pip install requests
 pip install pyTelegramBotApi
 ```
+Create wallet files:
 
+```
+btc_wallets_data.json
+eth_wallets_data.json
+trc20_wallets_data.json
+```
+in this fomrat:
+```
+[
+  {
+    "wallet": "WALLET_ADDRESS",
+    "title": "Exchange Name/Wallet Label"
+  }
+]
+```
 And then you can run scripts this way:
 ```
 btc_check.py
