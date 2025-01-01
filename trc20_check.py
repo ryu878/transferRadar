@@ -12,6 +12,18 @@ from _config import *
 bot_channel = telebot.TeleBot(bot_token)  
 
 
+def send_discord_message(message):
+    data = {
+        "content": message,
+        "username": "TransferRadar"
+    }
+    try:
+        requests.post(discord_webhook_url, json=data)
+        time.sleep(1)  # Rate limit protection
+    except Exception as e:
+        print(f'Discord error: {e}')
+
+
 def is_today(timestamp_ms):
     tx_date = date.fromtimestamp(timestamp_ms / 1000)
     return tx_date == date.today()
@@ -35,7 +47,6 @@ def save_last_checked(data):
 
 
 def get_usdt_transactions(address, last_timestamp=0):
-    # USDT contract address on TRON
     contract_address = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
     url = f"https://api.trongrid.io/v1/accounts/{address}/transactions/trc20"
     params = {
@@ -55,14 +66,18 @@ def get_usdt_transactions(address, last_timestamp=0):
         if timestamp <= last_timestamp or not is_today(timestamp):
             continue
             
-        amount = float(tx['value']) / 1e6  # USDT has 6 decimals
-        
-        if amount >= trc20_amnt:  # 1m USDT threshold
+        try:
+            amount = float(tx['value']) / 1e6  # USDT has 6 decimals
+            if not 0 < amount < 1e12:  # Sanity check for unrealistic amounts
+                continue
+        except (ValueError, TypeError):
+            continue
+            
+        if amount >= 1000000:
             tx_time = datetime.fromtimestamp(timestamp / 1000)
             transactions.append({
                 'timestamp': timestamp,
                 'time': tx_time,
-                'type': 'Transfer',
                 'amount': amount,
                 'from': tx['from'],
                 'to': tx['to'],
@@ -90,13 +105,22 @@ def main():
                     for tx in transactions:
                         print(f"  From: {title} {tx['from']}")
                         print(f"  To: {tx['to']}\n")
-                        print(f"- {tx['time']}: {tx['amount']:,.2f} USDT")
+                        print(f"- {tx['time']}: {tx['amount']:,.2f} USDT (TRC20)")
                         # print(f"  Hash: {tx['hash']}")
                         try:
-                            bot_channel.send_message(tg_channel_id, f"From: {title} {tx['from']}\nTo: {tx['to']}\n{tx['time']}: {tx['amount']:,.2f} USDT")
+                            bot_channel.send_message(tg_channel_id, f"From: <b>{title}</b> {tx['from']}\nTo: {tx['to']}\n{tx['time']}: <b>{tx['amount']:,.2f} USDT (TRC20)</b>", 
+    parse_mode='HTML')
                             time.sleep(6)
                         except Exception as e:
                             print(f' {e}')
+                            pass
+
+                        time.sleep(1)
+
+                        try:
+                            send_discord_message(f"--------\nFrom: **{title}** {tx['from']}\nTo: {tx['to']}\n{tx['time']}: **{tx['amount']:.2f} USDT (TRC20)**")
+                        except Exception as e:
+                            print(f" {e}")
                             pass
                     
                     last_checked[address] = max(tx['timestamp'] for tx in transactions)
