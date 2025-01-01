@@ -117,7 +117,7 @@ def main():
                         time.sleep(1)
 
                         try:
-                            send_discord_message(f"--------\nFrom: **{title}** {tx['from']}\nTo: {tx['to']}\n{tx['time']}: **{tx['amount']:.2f} ETH**")
+                            send_discord_message(f"--------\nFrom: {title} {tx['from']}\nTo: {tx['to']}\n{tx['time']}: **{tx['amount']:.2f} ETH**")
                         except Exception as e:
                             print(f" {e}")
                             pass
