@@ -11,6 +11,18 @@ from _config import *
 bot_channel = telebot.TeleBot(bot_token)
 
 
+def send_discord_message(message):
+    data = {
+        "content": message,
+        "username": "TransferRadar"
+    }
+    try:
+        requests.post(discord_webhook_url, json=data)
+        time.sleep(1)  # Rate limit protection
+    except Exception as e:
+        print(f'Discord error: {e}')
+
+
 def load_wallets(filename):
     with open(filename) as f:
         return json.load(f)
@@ -102,10 +114,19 @@ def main():
                         
                         try:
                             bot_channel.send_message(tg_channel_id, 
-                                f"From: {title} {tx['from']}\nTo: {tx['to']}\n{tx['time']}: {tx['amount']:.8f} BTC")
+                                f"From: <b>{title}</b> {tx['from']}\nTo: {tx['to']}\n{tx['time']}: <b>{tx['amount']:.8f} BTC</b>", 
+    parse_mode='HTML')
                             time.sleep(6)
                         except Exception as e:
                             print(f' {e}')
+                            pass
+
+                        time.sleep(1)
+
+                        try:
+                            send_discord_message(f"--------\nFrom: **{title}** {tx['from']}\nTo: {tx['to']}\n{tx['time']}: **{tx['amount']:.8f} BTC**")
+                        except Exception as e:
+                            print(f" {e}")
                             pass
                             
                     last_checked[address] = max(tx['timestamp'] for tx in transactions)
