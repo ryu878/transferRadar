@@ -124,7 +124,7 @@ def main():
                         time.sleep(1)
 
                         try:
-                            send_discord_message(f"--------\nFrom: **{title}** {tx['from']}\nTo: {tx['to']}\n{tx['time']}: **{tx['amount']:.8f} BTC**")
+                            send_discord_message(f"--------\nFrom: {title} {tx['from']}\nTo: {tx['to']}\n{tx['time']}: **{tx['amount']:.8f} BTC**")
                         except Exception as e:
                             print(f" {e}")
                             pass
