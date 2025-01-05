@@ -1,6 +1,9 @@
 # transferRadar
 Python scripts to monitor high-value transactions for BTC, USDT (TRC20) and ETH across major crypto exchanges 
 
+![image](https://github.com/user-attachments/assets/5fbc62fb-ae6d-47af-ace2-ad8bcce544f6)
+
+
 You can check how it works here: https://t.me/transferRadar
 or here: https://discord.gg/mZFsY4VDbA
 
