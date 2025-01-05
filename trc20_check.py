@@ -8,6 +8,10 @@ from _config import *
 
 
 
+ver = 'TRC20 Checker - 02/01/2025-15'
+print(ver)
+time.sleep(3)
+
 # Define Telegam Bot
 bot_channel = telebot.TeleBot(bot_token)  
 
@@ -15,7 +19,7 @@ bot_channel = telebot.TeleBot(bot_token)
 def send_discord_message(message):
     data = {
         "content": message,
-        "username": "TransferRadar"
+        "username": "Transfer Radar"
     }
     try:
         requests.post(discord_webhook_url, json=data)
@@ -73,16 +77,23 @@ def get_usdt_transactions(address, last_timestamp=0):
         except (ValueError, TypeError):
             continue
             
-        if amount >= 1000000:
+        if amount >= trc20_amnt:
             tx_time = datetime.fromtimestamp(timestamp / 1000)
-            transactions.append({
-                'timestamp': timestamp,
-                'time': tx_time,
-                'amount': amount,
-                'from': tx['from'],
-                'to': tx['to'],
-                'hash': tx['transaction_id']
-            })
+            
+            # Determine if this wallet is sender or receiver
+            is_sender = tx['from'].lower() == address.lower()
+            is_receiver = tx['to'].lower() == address.lower()
+            
+            if is_sender or is_receiver:
+                transactions.append({
+                    'timestamp': timestamp,
+                    'time': tx_time,
+                    'amount': amount,
+                    'from': tx['from'],
+                    'to': tx['to'],
+                    'is_sender': is_sender,
+                    'hash': tx['transaction_id']
+                })
     
     return transactions
 
@@ -91,47 +102,72 @@ def main():
     while True:
         try:
             last_checked = load_last_checked()
-            wallets = load_wallets('trc20_wallets_data.json')
+            wallets = load_wallets('trc20_wallets_data.json')  # btc/eth/trc20
             
             for wallet_info in wallets:
                 address = wallet_info['wallet']
                 title = wallet_info['title']
                 
                 last_timestamp = last_checked.get(address, 0)
-                transactions = get_usdt_transactions(address, last_timestamp)
+                transactions = get_usdt_transactions(address, last_timestamp)  # btc/eth/usdt
                 
                 if transactions:
-                    print(f"\nNew USDT transactions for {title} ({address}):")
+                    discord_title = f"**{title}**" if title else title
+                    telegram_title = f"<b>{title}</b>" if title else title
+
+                    print(f"\nNew transactions for {discord_title} ({address}):")
                     for tx in transactions:
-                        print(f"  From: {title} {tx['from']}")
-                        print(f"  To: {tx['to']}\n")
-                        print(f"- {tx['time']}: {tx['amount']:,.2f} USDT (TRC20)")
-                        # print(f"  Hash: {tx['hash']}")
+                        if tx['is_sender']:
+                            from_name_discord = f"{discord_title} ({tx['from']})" if discord_title else tx['from']
+                            to_name_discord = tx['to']
+                            from_name_telegram = f"{telegram_title} ({tx['from']})" if telegram_title else tx['from']
+                            to_name_telegram = tx['to']
+                        else:
+                            from_name_discord = tx['from']
+                            to_name_discord = f"{discord_title} ({tx['to']})" if discord_title else tx['to']
+                            from_name_telegram = tx['from']
+                            to_name_telegram = f"{telegram_title} ({tx['to']})" if telegram_title else tx['to']
+
+                        message_discord = (
+                            f"--------\nFrom: {from_name_discord}\n"
+                            f"To: {to_name_discord}\n"
+                            f"{tx['time']}: **{tx['amount']:.2f} USDT** (TRC20)"  # BTC/ETH/USDT
+                        )
+                        message_telegram = (
+                            f"From: {from_name_telegram}\n"
+                            f"To: {to_name_telegram}\n"
+                            f"{tx['time']}: <b>{tx['amount']:.2f} USDT</b> (TRC20)"  # BTC/ETH/USDT
+                        )
+                        
+                        print(message_telegram)
+                        
                         try:
-                            bot_channel.send_message(tg_channel_id, f"From: <b>{title}</b> {tx['from']}\nTo: {tx['to']}\n{tx['time']}: <b>{tx['amount']:,.2f} USDT (TRC20)</b>", 
-    parse_mode='HTML')
+                            send_discord_message(message_discord)
                             time.sleep(6)
                         except Exception as e:
-                            print(f' {e}')
+                            print(f" {e}")
                             pass
 
                         time.sleep(1)
 
                         try:
-                            send_discord_message(f"--------\nFrom: {title} {tx['from']}\nTo: {tx['to']}\n{tx['time']}: **{tx['amount']:.2f} USDT (TRC20)**")
+                            bot_channel.send_message(tg_channel_id, message_telegram, parse_mode='HTML')
+                            time.sleep(6)
                         except Exception as e:
                             print(f" {e}")
                             pass
-                    
+                            
                     last_checked[address] = max(tx['timestamp'] for tx in transactions)
                     save_last_checked(last_checked)
+
+                    time.sleep(6)
             
-            time.sleep(600)  # Wait 10 minutes
+            time.sleep(600)
             
         except Exception as e:
             print(f' Error occurred: {e}')
-            time.sleep(6)  # Wait 6 seconds on error before retrying
+            time.sleep(6)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

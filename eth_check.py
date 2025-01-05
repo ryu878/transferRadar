@@ -8,13 +8,17 @@ from _config import *
 
 
 
+ver = 'ETH Checker - 02/01/2025-15'
+print(ver)
+time.sleep(3)
+
 bot_channel = telebot.TeleBot(bot_token)
 
 
 def send_discord_message(message):
     data = {
         "content": message,
-        "username": "TransferRadar"
+        "username": "Transfer Radar"
     }
     try:
         requests.post(discord_webhook_url, json=data)
@@ -54,7 +58,7 @@ def get_eth_transactions(address, last_timestamp=0):
         "startblock": 0,
         "endblock": 99999999,
         "sort": "desc",
-        "apikey": etherscan_api_key  # Add this to _config.py
+        "apikey": etherscan_api_key
     }
     
     response = requests.get(url, params=params)
@@ -68,10 +72,13 @@ def get_eth_transactions(address, last_timestamp=0):
         timestamp = int(tx['timeStamp']) * 1000
         if timestamp <= last_timestamp or not is_today(timestamp):
             continue
-            
+        
         amount = float(tx['value']) / 1e18  # Convert wei to ETH
         
-        if amount >= eth_amount:  # 333 ETH threshold
+        is_sender = tx['from'].lower() == address.lower()
+        is_receiver = tx['to'].lower() == address.lower()
+        
+        if amount >= eth_amount:  # 100 ETH threshold
             tx_time = datetime.fromtimestamp(timestamp / 1000)
             transactions.append({
                 'timestamp': timestamp,
@@ -79,6 +86,8 @@ def get_eth_transactions(address, last_timestamp=0):
                 'amount': amount,
                 'from': tx['from'],
                 'to': tx['to'],
+                'is_sender': is_sender,
+                'is_receiver': is_receiver,
                 'hash': tx['hash']
             })
     
@@ -89,26 +98,47 @@ def main():
     while True:
         try:
             last_checked = load_last_checked()
-            wallets = load_wallets('eth_wallets_data.json')
+            wallets = load_wallets('eth_wallets_data.json')  # btc/eth/trc20
             
             for wallet_info in wallets:
                 address = wallet_info['wallet']
                 title = wallet_info['title']
                 
                 last_timestamp = last_checked.get(address, 0)
-                transactions = get_eth_transactions(address, last_timestamp)
+                transactions = get_eth_transactions(address, last_timestamp)  # btc/eth/usdt
                 
                 if transactions:
-                    print(f"\nNew ETH transactions for {title} ({address}):")
+                    discord_title = f"**{title}**" if title else title
+                    telegram_title = f"<b>{title}</b>" if title else title
+
+                    print(f"\nNew transactions for {discord_title} ({address}):")
                     for tx in transactions:
-                        print(f" From: {title} {tx['from']}")
-                        print(f" To: {tx['to']}\n")
-                        print(f"- {tx['time']}: {tx['amount']:.2f} ETH")
+                        if tx['is_sender']:
+                            from_name_discord = f"{discord_title} ({tx['from']})" if discord_title else tx['from']
+                            to_name_discord = tx['to']
+                            from_name_telegram = f"{telegram_title} ({tx['from']})" if telegram_title else tx['from']
+                            to_name_telegram = tx['to']
+                        else:
+                            from_name_discord = tx['from']
+                            to_name_discord = f"{discord_title} ({tx['to']})" if discord_title else tx['to']
+                            from_name_telegram = tx['from']
+                            to_name_telegram = f"{telegram_title} ({tx['to']})" if telegram_title else tx['to']
+
+                        message_discord = (
+                            f"--------\nFrom: {from_name_discord}\n"
+                            f"To: {to_name_discord}\n"
+                            f"{tx['time']}: **{tx['amount']:.2f} ETH**"  # BTC/ETH/USDT
+                        )
+                        message_telegram = (
+                            f"From: {from_name_telegram}\n"
+                            f"To: {to_name_telegram}\n"
+                            f"{tx['time']}: <b>{tx['amount']:.2f} ETH</b>"  # BTC/ETH/USDT
+                        )
+                        
+                        print(message_telegram)
                         
                         try:
-                            bot_channel.send_message(tg_channel_id, 
-                                f"From: <b>{title}</b> {tx['from']}\nTo: {tx['to']}\n{tx['time']}: <b>{tx['amount']:.2f} ETH</b>", 
-    parse_mode='HTML')
+                            send_discord_message(message_discord)
                             time.sleep(6)
                         except Exception as e:
                             print(f" {e}")
@@ -117,20 +147,23 @@ def main():
                         time.sleep(1)
 
                         try:
-                            send_discord_message(f"--------\nFrom: {title} {tx['from']}\nTo: {tx['to']}\n{tx['time']}: **{tx['amount']:.2f} ETH**")
+                            bot_channel.send_message(tg_channel_id, message_telegram, parse_mode='HTML')
+                            time.sleep(6)
                         except Exception as e:
                             print(f" {e}")
                             pass
                             
                     last_checked[address] = max(tx['timestamp'] for tx in transactions)
                     save_last_checked(last_checked)
+
+                    time.sleep(6)
             
             time.sleep(600)
             
         except Exception as e:
-            print(f" Error occurred: {e}")
+            print(f' Error occurred: {e}')
             time.sleep(6)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
