@@ -6,8 +6,6 @@ import os
 import telebot
 from _config import *
 
-
-
 ver = 'BTC Checker - 07/01/2025'
 print(ver)
 time.sleep(3)
@@ -28,8 +26,10 @@ def send_discord_message(message):
 
 
 def load_wallets(filename):
-    with open(filename) as f:
-        return json.load(f)
+    if os.path.exists(filename):
+        with open(filename) as f:
+            return json.load(f)
+    return []
 
 
 def load_last_checked():
@@ -42,6 +42,7 @@ def load_last_checked():
 def save_last_checked(data):
     with open('btc_last_checked.json', 'w') as f:
         json.dump(data, f)
+
 
 def is_today(timestamp_ms):
     tx_date = date.fromtimestamp(timestamp_ms / 1000)
@@ -62,39 +63,42 @@ def get_btc_transactions(address, last_timestamp=0):
     transactions = []
     data = response.json()
     
-    for tx in data.get('txs', []):
-        # Parse ISO format timestamp
+    for tx in data.get('txs', []):  # Safeguard 'txs' being None
         if tx.get('confirmed'):
-            timestamp = int(datetime.strptime(tx['confirmed'], '%Y-%m-%dT%H:%M:%SZ').timestamp() * 1000)
+            try:
+                timestamp = int(datetime.strptime(tx['confirmed'], '%Y-%m-%dT%H:%M:%SZ').timestamp() * 1000)
+            except ValueError:
+                timestamp = int(time.time() * 1000)
         else:
             timestamp = int(time.time() * 1000)
             
         if timestamp <= last_timestamp or not is_today(timestamp):
             continue
             
-        # Check if address is in inputs or outputs
-        is_sender = any(address.lower() in [addr.lower() for addr in input.get('addresses', [])] 
-                       for input in tx.get('inputs', []))
-        is_receiver = any(address.lower() in [addr.lower() for addr in output.get('addresses', [])] 
-                         for output in tx.get('outputs', []))
+        inputs = tx.get('inputs', []) or []
+        outputs = tx.get('outputs', []) or []
+
+        is_sender = any(address.lower() in [addr.lower() for addr in input.get('addresses', []) or []] 
+                        for input in inputs)
+        is_receiver = any(address.lower() in [addr.lower() for addr in output.get('addresses', []) or []] 
+                          for output in outputs)
         
         if not (is_sender or is_receiver):
             continue
             
-        # Calculate amount based on whether address is sender or receiver
         if is_sender:
-            amount = sum(output['value'] for output in tx.get('outputs', []) 
-                        if address.lower() not in [addr.lower() for addr in output.get('addresses', [])])
+            amount = sum(output['value'] for output in outputs 
+                         if address.lower() not in [addr.lower() for addr in output.get('addresses', []) or []])
         else:
-            amount = sum(output['value'] for output in tx.get('outputs', []) 
-                        if address.lower() in [addr.lower() for addr in output.get('addresses', [])])
+            amount = sum(output['value'] for output in outputs 
+                         if address.lower() in [addr.lower() for addr in output.get('addresses', []) or []])
         
         amount = amount / 1e8  # Convert satoshi to BTC
         
-        if amount >= btc_amount:  # BTC threshold
+        if amount >= btc_amount:
             tx_time = datetime.fromtimestamp(timestamp / 1000)
-            from_addr = tx['inputs'][0]['addresses'][0] if tx['inputs'] else 'Unknown'
-            to_addr = tx['outputs'][0]['addresses'][0] if tx['outputs'] else 'Unknown'
+            from_addr = tx.get('inputs', [{}])[0].get('addresses', ['Unknown'])[0]
+            to_addr = tx.get('outputs', [{}])[0].get('addresses', ['Unknown'])[0]
             
             transactions.append({
                 'timestamp': timestamp,
@@ -113,14 +117,14 @@ def main():
     while True:
         try:
             last_checked = load_last_checked()
-            wallets = load_wallets('btc_wallets_data.json')  # btc/eth/trc20
+            wallets = load_wallets('btc_wallets_data.json') or []
             
             for wallet_info in wallets:
                 address = wallet_info['wallet']
                 title = wallet_info['title']
                 
                 last_timestamp = last_checked.get(address, 0)
-                transactions = get_btc_transactions(address, last_timestamp)  # btc/eth/usdt
+                transactions = get_btc_transactions(address, last_timestamp)
                 
                 if transactions:
                     discord_title = f"**{title}**" if title else title
@@ -142,12 +146,12 @@ def main():
                         message_discord = (
                             f"--------\nFrom: {from_name_discord}\n"
                             f"To: {to_name_discord}\n"
-                            f"{tx['time']}: **{tx['amount']:.2f} BTC**"  # BTC/ETH/USDT
+                            f"{tx['time']}: **{tx['amount']:.2f} BTC**"
                         )
                         message_telegram = (
                             f"From: {from_name_telegram}\n"
                             f"To: {to_name_telegram}\n"
-                            f"{tx['time']}: <b>{tx['amount']:.2f} BTC</b>"  # BTC/ETH/USDT
+                            f"{tx['time']}: <b>{tx['amount']:.2f} BTC</b>"
                         )
                         
                         print(message_telegram)
@@ -156,8 +160,7 @@ def main():
                             send_discord_message(message_discord)
                             time.sleep(6)
                         except Exception as e:
-                            print(f" {e}")
-                            pass
+                            print(f"Discord error: {e}")
 
                         time.sleep(1)
 
@@ -165,18 +168,15 @@ def main():
                             bot_channel.send_message(tg_channel_id, message_telegram, parse_mode='HTML')
                             time.sleep(6)
                         except Exception as e:
-                            print(f" {e}")
-                            pass
+                            print(f"Telegram error: {e}")
                             
                     last_checked[address] = max(tx['timestamp'] for tx in transactions)
                     save_last_checked(last_checked)
 
-                    time.sleep(60)
-            
             time.sleep(600)
             
         except Exception as e:
-            print(f' Error occurred: {e}')
+            print(f'Error occurred: {e}')
             time.sleep(6)
 
 
