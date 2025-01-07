@@ -171,7 +171,7 @@ def main():
                     last_checked[address] = max(tx['timestamp'] for tx in transactions)
                     save_last_checked(last_checked)
 
-                    time.sleep(6)
+                    time.sleep(60)
             
             time.sleep(600)
             
