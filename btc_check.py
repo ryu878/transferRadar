@@ -8,7 +8,7 @@ from _config import *
 
 
 
-ver = 'BTC Checker - 02/01/2025-15'
+ver = 'BTC Checker - 07/01/2025'
 print(ver)
 time.sleep(3)
 
