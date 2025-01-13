@@ -128,15 +128,24 @@ def main():
                             from_name_telegram = tx['from']
                             to_name_telegram = f"{telegram_title} ({tx['to']})" if telegram_title else tx['to']
 
+                        def format_number(amount):
+                            # Форматирование числа: разделители тысяч пробелами, две цифры после запятой
+                            parts = f"{amount:.2f}".split(".")
+                            parts[0] = "{:,}".format(int(parts[0])).replace(",", " ")
+                            return ",".join(parts)
+
+                        # Форматируем сумму для отображения
+                        formatted_amount = format_number(tx['amount'])
+
                         message_discord = (
                             f"--------\nFrom: {from_name_discord}\n"
                             f"To: {to_name_discord}\n"
-                            f"{tx['time']}: **{tx['amount']:.2f} USDT** (TRC20)"  # BTC/ETH/USDT
+                            f"{tx['time']}: **{formatted_amount} USDT** (TRC20)"  # BTC/ETH/USDT
                         )
                         message_telegram = (
                             f"From: {from_name_telegram}\n"
                             f"To: {to_name_telegram}\n"
-                            f"{tx['time']}: <b>{tx['amount']:.2f} USDT</b> (TRC20)"  # BTC/ETH/USDT
+                            f"{tx['time']}: <b>{formatted_amount} USDT</b> (TRC20)"  # BTC/ETH/USDT
                         )
                         
                         print(message_telegram)

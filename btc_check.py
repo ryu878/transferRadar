@@ -5,8 +5,13 @@ from datetime import datetime, date
 import os
 import telebot
 from _config import *
+import locale
 
-ver = 'BTC Checker - 07/01/2025'
+
+
+locale.setlocale(locale.LC_ALL, 'ru_RU.UTF-8')
+
+ver = 'BTC Checker - 13/01/2025'
 print(ver)
 time.sleep(3)
 
@@ -143,15 +148,17 @@ def main():
                             from_name_telegram = tx['from']
                             to_name_telegram = f"{telegram_title} ({tx['to']})" if telegram_title else tx['to']
 
+                        amount_formatted = locale.format_string('%.2f', tx['amount'], grouping=True)
+
                         message_discord = (
                             f"--------\nFrom: {from_name_discord}\n"
                             f"To: {to_name_discord}\n"
-                            f"{tx['time']}: **{tx['amount']:.2f} BTC**"
+                            f"{tx['time']}: **{amount_formatted} BTC**"
                         )
                         message_telegram = (
                             f"From: {from_name_telegram}\n"
                             f"To: {to_name_telegram}\n"
-                            f"{tx['time']}: <b>{tx['amount']:.2f} BTC</b>"
+                            f"{tx['time']}: <b>{amount_formatted} BTC</b>"
                         )
                         
                         print(message_telegram)
