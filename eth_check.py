@@ -7,9 +7,9 @@ import telebot
 from _config import *
 
 
-
-ver = 'ETH Checker - 13/01/2025'
-print(ver)
+name = 'ETH Checker'
+ver = '070225'
+print(f' {name} ver: {ver}')
 time.sleep(3)
 
 bot_channel = telebot.TeleBot(bot_token)
@@ -28,8 +28,19 @@ def send_discord_message(message):
 
 
 def load_wallets(filename):
-    with open(filename) as f:
-        return json.load(f)
+    if os.path.exists(filename):
+        with open(filename) as f:
+            return json.load(f)
+    return []
+
+
+def update_wallets(filename, new_wallet):
+    wallets = load_wallets(filename)
+    if not any(wallet['wallet'] == new_wallet for wallet in wallets):
+        wallets.append({"wallet": new_wallet, "title": "New Wallet"})
+        with open(filename, 'w') as f:
+            json.dump(wallets, f, indent=2)
+        print(f"New wallet added: {new_wallet}")
 
 
 def load_last_checked():
@@ -78,7 +89,7 @@ def get_eth_transactions(address, last_timestamp=0):
         is_sender = tx['from'].lower() == address.lower()
         is_receiver = tx['to'].lower() == address.lower()
         
-        if amount >= eth_amount:  # 100 ETH threshold
+        if amount >= eth_amount:
             tx_time = datetime.fromtimestamp(timestamp / 1000)
             transactions.append({
                 'timestamp': timestamp,
@@ -98,14 +109,15 @@ def main():
     while True:
         try:
             last_checked = load_last_checked()
-            wallets = load_wallets('eth_wallets_data.json')  # btc/eth/trc20
+            wallets_file = 'eth_wallets_data.json'
+            wallets = load_wallets(wallets_file)
             
             for wallet_info in wallets:
                 address = wallet_info['wallet']
                 title = wallet_info['title']
                 
                 last_timestamp = last_checked.get(address, 0)
-                transactions = get_eth_transactions(address, last_timestamp)  # btc/eth/usdt
+                transactions = get_eth_transactions(address, last_timestamp)
                 
                 if transactions:
                     discord_title = f"**{title}**" if title else title
@@ -125,12 +137,10 @@ def main():
                             to_name_telegram = f"{telegram_title} ({tx['to']})" if telegram_title else tx['to']
 
                         def format_number(amount):
-                            # Форматирование числа: разделители тысяч пробелами, две цифры после запятой
                             parts = f"{amount:.2f}".split(".")
                             parts[0] = "{:,}".format(int(parts[0])).replace(",", " ")
                             return ",".join(parts)
 
-                        # Форматируем сумму для отображения
                         formatted_amount = format_number(tx['amount'])
 
                         message_discord = (
@@ -145,7 +155,7 @@ def main():
                         )
                         
                         print(message_telegram)
-                        
+
                         try:
                             send_discord_message(message_discord)
                             time.sleep(6)
@@ -161,7 +171,13 @@ def main():
                         except Exception as e:
                             print(f" {e}")
                             pass
-                            
+
+                        # Update wallets with unknown addresses
+                        if tx['is_sender']:
+                            update_wallets(wallets_file, tx['to'])
+                        else:
+                            update_wallets(wallets_file, tx['from'])
+
                     last_checked[address] = max(tx['timestamp'] for tx in transactions)
                     save_last_checked(last_checked)
 

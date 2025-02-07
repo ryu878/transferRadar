@@ -8,12 +8,12 @@ from _config import *
 
 
 
-ver = 'TRC20 Checker - 02/01/2025-15'
-print(ver)
+name = 'TRC20 Checker'
+ver = '070225'
+print(f' {name} ver: {ver}')
 time.sleep(3)
 
-# Define Telegam Bot
-bot_channel = telebot.TeleBot(bot_token)  
+bot_channel = telebot.TeleBot(bot_token)
 
 
 def send_discord_message(message):
@@ -34,8 +34,19 @@ def is_today(timestamp_ms):
 
 
 def load_wallets(filename):
-    with open(filename) as f:
-        return json.load(f)
+    if os.path.exists(filename):
+        with open(filename) as f:
+            return json.load(f)
+    return []
+
+
+def update_wallets(filename, new_wallet):
+    wallets = load_wallets(filename)
+    if not any(wallet['wallet'] == new_wallet for wallet in wallets):
+        wallets.append({"wallet": new_wallet, "title": "New Wallet"})
+        with open(filename, 'w') as f:
+            json.dump(wallets, f, indent=2)
+        print(f"New wallet added: {new_wallet}")
 
 
 def load_last_checked():
@@ -57,33 +68,31 @@ def get_usdt_transactions(address, last_timestamp=0):
         "contract_address": contract_address,
         "limit": 100
     }
-    
+
     response = requests.get(url, params=params)
     if response.status_code != 200:
         return []
-    
+
     transactions = []
     data = response.json()
-    
+
     for tx in data.get('data', []):
         timestamp = tx['block_timestamp']
         if timestamp <= last_timestamp or not is_today(timestamp):
             continue
-            
+
         try:
             amount = float(tx['value']) / 1e6  # USDT has 6 decimals
             if not 0 < amount < 1e12:  # Sanity check for unrealistic amounts
                 continue
         except (ValueError, TypeError):
             continue
-            
+
         if amount >= trc20_amnt:
             tx_time = datetime.fromtimestamp(timestamp / 1000)
-            
-            # Determine if this wallet is sender or receiver
             is_sender = tx['from'].lower() == address.lower()
             is_receiver = tx['to'].lower() == address.lower()
-            
+
             if is_sender or is_receiver:
                 transactions.append({
                     'timestamp': timestamp,
@@ -94,7 +103,7 @@ def get_usdt_transactions(address, last_timestamp=0):
                     'is_sender': is_sender,
                     'hash': tx['transaction_id']
                 })
-    
+
     return transactions
 
 
@@ -102,15 +111,16 @@ def main():
     while True:
         try:
             last_checked = load_last_checked()
-            wallets = load_wallets('trc20_wallets_data.json')  # btc/eth/trc20
-            
+            wallets_file = 'trc20_wallets_data.json'
+            wallets = load_wallets(wallets_file)
+
             for wallet_info in wallets:
                 address = wallet_info['wallet']
                 title = wallet_info['title']
-                
+
                 last_timestamp = last_checked.get(address, 0)
-                transactions = get_usdt_transactions(address, last_timestamp)  # btc/eth/usdt
-                
+                transactions = get_usdt_transactions(address, last_timestamp)
+
                 if transactions:
                     discord_title = f"**{title}**" if title else title
                     telegram_title = f"<b>{title}</b>" if title else title
@@ -128,34 +138,26 @@ def main():
                             from_name_telegram = tx['from']
                             to_name_telegram = f"{telegram_title} ({tx['to']})" if telegram_title else tx['to']
 
-                        def format_number(amount):
-                            # Форматирование числа: разделители тысяч пробелами, две цифры после запятой
-                            parts = f"{amount:.2f}".split(".")
-                            parts[0] = "{:,}".format(int(parts[0])).replace(",", " ")
-                            return ",".join(parts)
-
-                        # Форматируем сумму для отображения
-                        formatted_amount = format_number(tx['amount'])
+                        formatted_amount = f"{tx['amount']:,.2f}".replace(",", " ")
 
                         message_discord = (
                             f"--------\nFrom: {from_name_discord}\n"
                             f"To: {to_name_discord}\n"
-                            f"{tx['time']}: **{formatted_amount} USDT** (TRC20)"  # BTC/ETH/USDT
+                            f"{tx['time']}: **{formatted_amount} USDT** (TRC20)"
                         )
                         message_telegram = (
                             f"From: {from_name_telegram}\n"
                             f"To: {to_name_telegram}\n"
-                            f"{tx['time']}: <b>{formatted_amount} USDT</b> (TRC20)"  # BTC/ETH/USDT
+                            f"{tx['time']}: <b>{formatted_amount} USDT</b> (TRC20)"
                         )
-                        
+
                         print(message_telegram)
-                        
+
                         try:
                             send_discord_message(message_discord)
                             time.sleep(6)
                         except Exception as e:
                             print(f" {e}")
-                            pass
 
                         time.sleep(1)
 
@@ -164,15 +166,20 @@ def main():
                             time.sleep(6)
                         except Exception as e:
                             print(f" {e}")
-                            pass
-                            
+
+                        # Update wallets with unknown addresses
+                        if tx['is_sender']:
+                            update_wallets(wallets_file, tx['to'])
+                        else:
+                            update_wallets(wallets_file, tx['from'])
+
                     last_checked[address] = max(tx['timestamp'] for tx in transactions)
                     save_last_checked(last_checked)
 
                     time.sleep(6)
-            
+
             time.sleep(600)
-            
+
         except Exception as e:
             print(f' Error occurred: {e}')
             time.sleep(6)

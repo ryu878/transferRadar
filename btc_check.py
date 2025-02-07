@@ -11,8 +11,9 @@ import locale
 
 locale.setlocale(locale.LC_ALL, 'ru_RU.UTF-8')
 
-ver = 'BTC Checker - 13/01/2025'
-print(ver)
+name = 'BTC Checker'
+ver = '070225'
+print(f' {name} ver: {ver}')
 time.sleep(3)
 
 bot_channel = telebot.TeleBot(bot_token)
@@ -118,25 +119,51 @@ def get_btc_transactions(address, last_timestamp=0):
     return transactions
 
 
+def add_wallet_to_file(wallet, title, filename):
+    wallets = load_wallets(filename)
+    # Check if the wallet already exists
+    if any(entry['wallet'] == wallet for entry in wallets):
+        return
+
+    # Add the new wallet and save back to the file
+    wallets.append({"wallet": wallet, "title": title})
+    with open(filename, 'w') as f:
+        json.dump(wallets, f, indent=2)
+    print(f"New wallet added: {wallet} ({title})")
+
+
 def main():
     while True:
         try:
             last_checked = load_last_checked()
             wallets = load_wallets('btc_wallets_data.json') or []
-            
+            wallet_addresses = {w['wallet'] for w in wallets}
+
             for wallet_info in wallets:
                 address = wallet_info['wallet']
                 title = wallet_info['title']
-                
+
                 last_timestamp = last_checked.get(address, 0)
                 transactions = get_btc_transactions(address, last_timestamp)
-                
+
                 if transactions:
                     discord_title = f"**{title}**" if title else title
                     telegram_title = f"<b>{title}</b>" if title else title
 
                     print(f"\nNew transactions for {discord_title} ({address}):")
                     for tx in transactions:
+                        from_wallet = tx['from']
+                        to_wallet = tx['to']
+
+                        # Add any new wallet found in transactions
+                        if from_wallet not in wallet_addresses:
+                            add_wallet_to_file(from_wallet, "Unknown Sender", 'btc_wallets_data.json')
+                            wallet_addresses.add(from_wallet)
+
+                        if to_wallet not in wallet_addresses:
+                            add_wallet_to_file(to_wallet, "Unknown Receiver", 'btc_wallets_data.json')
+                            wallet_addresses.add(to_wallet)
+
                         if tx['is_sender']:
                             from_name_discord = f"{discord_title} ({tx['from']})" if discord_title else tx['from']
                             to_name_discord = tx['to']
@@ -160,9 +187,9 @@ def main():
                             f"To: {to_name_telegram}\n"
                             f"{tx['time']}: <b>{amount_formatted} BTC</b>"
                         )
-                        
+
                         print(message_telegram)
-                        
+
                         try:
                             send_discord_message(message_discord)
                             time.sleep(6)
@@ -176,12 +203,12 @@ def main():
                             time.sleep(6)
                         except Exception as e:
                             print(f"Telegram error: {e}")
-                            
+
                     last_checked[address] = max(tx['timestamp'] for tx in transactions)
                     save_last_checked(last_checked)
 
             time.sleep(600)
-            
+
         except Exception as e:
             print(f'Error occurred: {e}')
             time.sleep(6)
